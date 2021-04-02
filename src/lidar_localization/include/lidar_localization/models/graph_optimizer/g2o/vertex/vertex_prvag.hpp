@@ -72,6 +72,28 @@ public:
         //
         // TODO: do update
         //
+        int INDEX_POS = 0;
+        int INDEX_ORI = 3;
+        int INDEX_VEL = 6;
+        int INDEX_B_A = 9;
+        int INDEX_B_G = 12;
+
+        Eigen::Vector3d upd_P = Eigen::Vector3d(update[INDEX_POS + 0], update[INDEX_POS + 1], update[INDEX_POS + 2]);
+        Eigen::Vector3d upd_Phi = Eigen::Vector3d(update[INDEX_ORI + 0], update[INDEX_ORI + 1], update[INDEX_ORI + 2]);
+        Eigen::Vector3d upd_V = Eigen::Vector3d(update[INDEX_VEL + 0], update[INDEX_VEL + 1], update[INDEX_VEL + 2]);
+        Eigen::Vector3d upd_dBa = Eigen::Vector3d(update[INDEX_B_A + 0], update[INDEX_B_A + 1], update[INDEX_B_A + 2]);
+        Eigen::Vector3d upd_dBg = Eigen::Vector3d(update[INDEX_B_G + 0], update[INDEX_B_G + 1], update[INDEX_B_G + 2]);
+
+        _estimate.pos += upd_P;
+
+        Sophus::SO3d dR = Sophus::SO3d::exp(upd_Phi);
+        _estimate.ori *= dR;
+
+        _estimate.vel += upd_V;
+        _estimate.b_a += upd_dBa;
+        _estimate.b_g += upd_dBg;
+
+        updateDeltaBiases(upd_dBa, upd_dBg);
     }
 
     bool isUpdated(void) const { return _is_updated; }

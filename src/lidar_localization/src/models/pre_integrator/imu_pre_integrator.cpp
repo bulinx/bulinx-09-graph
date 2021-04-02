@@ -228,37 +228,77 @@ void IMUPreIntegrator::UpdateState(void) {
     // TODO: a. update mean:
     //
     // 1. get w_mid:
+    //
+    w_mid = 0.5 * ( prev_w + curr_w );
+
     // 2. update relative orientation, so3:
+    prev_theta_ij = state.theta_ij_;
+    d_theta_ij = Sophus::SO3d::exp(w_mid * T);
+    state.theta_ij_ = state.theta_ij_ * d_theta_ij;
+    curr_theta_ij = state.theta_ij_;
+
     // 3. get a_mid:
+    a_mid = 0.5 * ( prev_theta_ij * prev_a + curr_theta_ij * curr_a );
+
     // 4. update relative translation:
+    state.alpha_ij_ = state.alpha_ij_ + state.beta_ij_ * T + 0.5 * a_mid * T * T; 
+
     // 5. update relative velocity:
+    state.beta_ij_ += a_mid * T;
 
     //
     // TODO: b. update covariance:
     //
     // 1. intermediate results:
+    prev_R = prev_theta_ij.matrix();
+    curr_R = curr_theta_ij.matrix();
+    prev_R_a_hat = prev_R * Sophus::SO3d::hat(prev_a);
+    curr_R_a_hat = curr_R * Sophus::SO3d::hat(curr_a);
 
     //
     // TODO: 2. set up F:
     //
     // F12 & F32:
-    // F14 & F34:
-    // F15 & F35:
-    // F22:
+    F_.block<3, 3>(0, 3) = -0.25 * T * (prev_R_a_hat +  curr_R_a_hat * (Eigen::Matrix3d::Identity() - Sophus::SO3d::hat(w_mid) * T));
+    F_.block<3, 3>(6, 3) = -0.50 *     (prev_R_a_hat +  curr_R_a_hat * (Eigen::Matrix3d::Identity() - Sophus::SO3d::hat(w_mid) * T));
 
-    //
+    // F14 & F34:
+    F_.block<3, 3>(0, 9) = -0.25 * T * (prev_R + curr_R);
+    F_.block<3, 3>(6, 9) = -0.50     * (prev_R + curr_R);
+
+    // F15 & F35:
+    F_.block<3, 3>(0, 12) =  0.25 * T * T * curr_R_a_hat;
+    F_.block<3, 3>(6, 12) =  0.50     * T * curr_R_a_hat;
+
+    // F22:
+    F_.block<3, 3>(3, 3) = -Sophus::SO3d::hat(w_mid);
+
     // TODO: 3. set up G:
-    //
     // G11 & G31:
+    B_.block<3, 3>(0, 0) =  0.25 * T * prev_R;
+    B_.block<3, 3>(6, 0) =  0.50     * prev_R;
+
     // G12 & G32:
+    B_.block<3, 3>(0, 3) = -0.125 * T * T * curr_R_a_hat;
+    B_.block<3, 3>(6, 3) = -0.250     * T * curr_R_a_hat;
+
     // G13 & G33:
+    B_.block<3, 3>(0, 6) =  0.25 * T * curr_R;
+    B_.block<3, 3>(6, 6) =  0.50     * curr_R;
+
     // G14 & G34:
+    B_.block<3, 3>(0, 9) = -0.125 * T * T * curr_R_a_hat;
+    B_.block<3, 3>(6, 9) = -0.250     * T * curr_R_a_hat;
 
     // TODO: 4. update P_:
+    MatrixF F = MatrixF::Identity() + T * F_;
+    MatrixB B = T * B_;
+
+    P_ = F*P_*F.transpose() + B*Q_*B.transpose();
 
     // 
     // TODO: 5. update Jacobian:
-    //
+    J_ = F * J_;
 }
 
 } // namespace lidar_localization
